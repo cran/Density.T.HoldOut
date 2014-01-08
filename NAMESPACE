@@ -1,0 +1,7 @@
+export(DensityTestim)
+export(TBuildIrregularHisto)
+export(TBuildKernel)
+export(TBuildList)
+export(TBuildParametric)
+export(TBuildRegularHisto)
+import(histogram)
