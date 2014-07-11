@@ -15,9 +15,10 @@ via the \code{\link{TBuildList}} function, and one validation sample, used to se
 from this set using T-estimation as introduced in Birgé(2006).  
 }
 \usage{
-DensityTestim(X,p=1/2,family=NULL,theta=1/4,last=c('full','training'),plot=TRUE,
-	verbose=TRUE,wlegend=TRUE,kerneltab=NULL,Dmax=NULL,bwtab=NULL,do.MLHO=FALSE,
-	do.LSHO=FALSE,start=c('LSHO','MLHO'),csqrt=0,...)			
+DensityTestim(X,p=1/2,family=NULL,test=c('birge','baraud'),theta=1/4,
+	last=c('full','training'),plot=TRUE,verbose=TRUE,wlegend=TRUE,kerneltab=NULL,
+	Dmax=NULL,bwtab=NULL,do.MLHO=FALSE,do.LSHO=FALSE,start=c('LSHO','MLHO'),csqrt=1,
+	H2dist=NULL,allImageX2=NULL,flist=NULL,...)			
 }
 
 \arguments{
@@ -29,6 +30,9 @@ DensityTestim(X,p=1/2,family=NULL,theta=1/4,last=c('full','training'),plot=TRUE,
 }
   \item{family}{
 	estimator family name(s). If family is NULL (default), use family = c("Kernel", "RegularHisto", "IrregularHisto", "Parametric").
+}
+  \item{test}{
+	either 'birge' (default) or 'baraud'. Controls the test used in the T-estimation. Default value 'birge' implements T-estimation as introduced in Birgé (2006) while 'baraud' use its modified version using the test derived from Baraud (2011).
 }
   \item{theta}{
 	parameter which controls the radius of test balls. Has to be smaller than 1/2 (cf. Magalhães and Rozenholc (2014)). Default 1/4.
@@ -70,7 +74,16 @@ DensityTestim(X,p=1/2,family=NULL,theta=1/4,last=c('full','training'),plot=TRUE,
 	starting point of the algorithm, either 'LSHO' (default) or 'MLHO'. 
 }
 \item{csqrt}{
-	constant used in the threshold distance for the greedy version. If 0 (default) the exact T-estimation is computed.
+	numeric (Default 1). If 0 the exact T-estimation is computed. Otherwise a faster but approximate T-estimator is computed based on estimators separated by an Hellinger distance larger than c/sqrt((1-p)*n). (See Magalhães and Rozenholc (2014) for more details)
+}
+\item{H2dist}{
+	not documented. Only for simulation purpose.
+}
+\item{allImageX2}{
+	not documented. Only for simulation purpose.
+}
+\item{flist}{
+	not documented. Only for simulation purpose.
 }
 \item{...}{
 	for other options when plot is TRUE, as in the plot function.
@@ -87,6 +100,10 @@ DensityTestim returns a list with components
 	\item{M}{number of considered estimators}
 	\item{comput}{number of tests needed to select the T-Hold-Out}
 	\item{total}{M*(M-1)/2}
+	\item{H2dist}{not documented. Only for simulation purpose.}
+	\item{allImageX2}{not documented. Only for simulation purpose.}
+	\item{flist}{not documented. Only for simulation purpose.
+}
 Moreover if plot=TRUE, the chosen estimator is plotted together with the one chosen by the LSHO (default).
 }
 \references{

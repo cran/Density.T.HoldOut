@@ -1,8 +1,8 @@
-a196675ffb5c74eb2f92086428122355 *DESCRIPTION
+a138e7a0868efa1ed0b869d212a9a2d7 *DESCRIPTION
 f9d34bb1e76059c994b418398f213b46 *NAMESPACE
-08a2a246d307277aae3436ac776282f7 *R/DensityTestim.R
+3193608448977ff4c0c3c96c92a5116d *R/DensityTestim.R
 ef47d2147990ca430c45ca9bbb997351 *man/Density.T.HoldOut-package.Rd
-357a94a6177ee0362b3459eecddcfe36 *man/DensityTestim.Rd
+5b1b2b5a3cecfd9e4c662114aaba440a *man/DensityTestim.Rd
 7d90705693ee5695d57b875c9a07bf86 *man/TBuildIrregularHisto.Rd
 ff292310137418e03bceb77002395f6d *man/TBuildKernel.Rd
 949b916a061c2ea4f4309426223fdbed *man/TBuildList.Rd

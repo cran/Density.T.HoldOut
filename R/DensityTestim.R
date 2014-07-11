@@ -153,6 +153,15 @@ DynamicList = function (C, B, D) {
 ################ Utilities for Testimation simulations ##################
 ################ Utilities for Testimation simulations ##################
 ################ Utilities for Testimation simulations ##################
+TBuildEstim = function(descript,X) {
+	f = switch(descript[[1]],					
+		'kernel' = Tkernel(X=X,bw=descript$bw,kernel=descript$kernel),
+		'histo' = Thisto(X=X,D=descript$D,breaks=descript$breaks),
+		'parametric' = Tparametric(X=X,name=descript$name)
+		)
+	
+}
+
 Tkernel = function(X,bw=NULL,kernel) {
 	# X is a sample
 	# bw bandwidth
@@ -469,15 +478,19 @@ Tdistance = function(g1,g2,p,npts=100) {
 ###################### MAIN FUNCTION #########################
 ###################### MAIN FUNCTION #########################
 
-DensityTestim = function(X,p=1/2,family=NULL,theta=1/4,last=c('full','training'),
+DensityTestim = function(X,p=1/2,family=NULL,test=c('birge','baraud'),theta=1/4,last=c('full','training'),
 	plot=TRUE,verbose=TRUE,wlegend=TRUE,kerneltab=NULL,Dmax=NULL,bwtab=NULL,
-	do.MLHO=FALSE,do.LSHO=FALSE,start=c('LSHO','MLHO'),csqrt=0,...) {
+	do.MLHO=FALSE,do.LSHO=FALSE,start=c('LSHO','MLHO'),csqrt=1,
+	H2dist=NULL,allImageX2=NULL,flist=NULL,
+	...) {
+					
+	test = match.arg(test)		
+	last = match.arg(last)
+	if (verbose) print(paste('Uses test',test))		
 					
 	if (is.null(family)) 
 		family=c('Kernel','RegularHisto','IrregularHisto','Parametric')
 		
-	#### INITIALIZATION ######
-	H2test = allImageX2 = NULL
 		
 	################# INTERNAL PROCEDURE #################		
 	################# INTERNAL PROCEDURE #################		
@@ -491,8 +504,7 @@ DensityTestim = function(X,p=1/2,family=NULL,theta=1/4,last=c('full','training')
 		Thellinger2 = function(i,j) Tdistance(flist[[i]],flist[[j]],'Hellinger')^2
 		
 		BuildAllImage = function() {
-			
-			# Compute the likelihood for each estimate of flist
+			# Compute the image of X2 for each estimate of flist
 			lik = sapply(1:length(flist),
 				function(m) allImageX2[m,] <<- flist[[m]]$f(X2)
 				)
@@ -508,13 +520,11 @@ DensityTestim = function(X,p=1/2,family=NULL,theta=1/4,last=c('full','training')
 			
 			if (i==j) return(FALSE)
 			
-			if (is.null(affinity)) affinity=1-Thellinger2(i,j)  ### USELESS ???
-			if (is.na(affinity)||(affinity==1)) return(FALSE)
-						
-			omega<-acos(affinity)
+			gi=flist[[i]]
+			gj=flist[[j]]
 			
-			if (is.na(allImageX2[i,1])) allImageX2[i,] <<- flist[[i]](X2)
-			if (is.na(allImageX2[j,1])) allImageX2[j,] <<- flist[[j]](X2)
+			if (is.na(allImageX2[i,1])) allImageX2[i,] <<- gi(X2)
+			if (is.na(allImageX2[j,1])) allImageX2[j,] <<- gj(X2)
 			
 			Yi = allImageX2[i,]
 			Yj = allImageX2[j,]
@@ -522,61 +532,73 @@ DensityTestim = function(X,p=1/2,family=NULL,theta=1/4,last=c('full','training')
 			ind = which(Yi+Yj>0)
 			Yi = Yi[ind]
 			Yj = Yj[ind]
+			sYi = sqrt(Yi)
+			sYj = sqrt(Yj)
 			
-			P = prod(
-				(sin(omega*theta)*sqrt(Yi)+sin(omega*(1-theta))*sqrt(Yj)) / 
-				(sin(omega*theta)*sqrt(Yj)+sin(omega*(1-theta))*sqrt(Yi))
-				)
+			###### Birgé (2006)'s test
+			if (test=='birge') {
+				if (is.na(affinity)||(affinity==1)) return(FALSE)
+				omega<-acos(affinity)
+				P = prod(
+					(sin(omega*theta)*sYi+sin(omega*(1-theta))*sYj) / 
+					(sin(omega*theta)*sYj+sin(omega*(1-theta))*sYi)
+					) - 1
+			}			
 			
-			# if (P>=1) j else i
-			H2test[i,j] <<- (P>=1)
+			###### Baraud (2011)'s test
+			if (test=='baraud') {
+				sij = gi ##### to be the mean of i and j
+				sij$f = function(z) (gi$f(z)+gj$f(z))/2 ### now it is the mean
+				sij$cuts = sort(unique(c(gi$cuts,gj$cuts)))
+				if (!((exists('descript',gi)&&(gi$descript[[1]]=='histo'))
+					&(exists('descript',gj)&&(gj$descript[[1]]=='histo')))) sij$descript = NULL
+				P = Tdistance(gi,sij,'Hellinger')^2-Tdistance(gj,sij,'Hellinger')^2 + sqrt(2)*sum((sYj-sYi)/sqrt((Yj+Yi)))/n2
+			}
+			
+			# if (P>=0) j else i
+			H2test[i,j] <<- (P>=0)
 			H2test[j,i] <<- (!H2test[i,j])
-			(P>=1)
+			(P>=0)
 		}
 	
 		M = length(flist); 
 		thr2 = csqrt^2/n2
 		
 		# Matrix of squared Hellinger distances
-		H2dist<-matrix(NA,nrow=M,ncol=M)
+		if (is.null(H2dist)) H2dist<-matrix(NA,nrow=M,ncol=M)
 		
 		# Matrix of the Hellinger test result
-		H2test<<-matrix(NA,nrow=M,ncol=M)
+		H2test<-matrix(NA,nrow=M,ncol=M)
 	
 		# Value at X of the flist estimates	
-		allImageX2 <<- matrix(NA,nrow=M,ncol=n2)
-		
-		# Compute X2-likelihood for the flist estimates	
-		# Returns the estimate f of flist where the ML is achieved
-		# used as a starting point of the T-estimation procedure
-		BuildAllImage(); 
+		if (is.null(allImageX2)) {
+			allImageX2 <<- matrix(NA,nrow=M,ncol=n2)
+			BuildAllImage()
+			} 
 		
 		if ((start[1]=='MLHO')|(do.MLHO)) {
 			ML = apply(allImageX2,1,function(x) sum(log(x[x>0])))/n2
-			Imle=which.max(ML)
-			MLHO=flist[[Imle]]
+			i0 = i0.ML = which.max(ML)
+			MLHO = flist[[i0.ML]]
 			do.MLHO = T
-			} else MLHO=NULL
+			} else i0.ML = MLHO = NULL
 	
 		if ((start[1]=='LSHO')|(do.LSHO)) {
 			LS=-2*rowMeans(allImageX2)
-			for(m in 1:M) LS[m] = LS[m]+Tnorm(flist[[m]],2)				
-			Ilse=which.min(LS)
-			LSHO=flist[[Ilse]]
+			for(m in 1:M) LS[m] = LS[m]+Tnorm(flist[[m]],2)^2			
+			i0 = i0.LS = which.min(LS)
+			LSHO=flist[[i0.LS]]
 			do.LSHO = T
-			} else LSHO=NULL
+			} else i0.LS = LSHO = NULL
 			
-		i0 = switch(start[1],
-			'MLHO'=Imle,
-			'LSHO'=Ilse
-			)
+		if (is.numeric(start[1])) i0=start[1]
 			
 		# Compute the distance between i0-select estimate and the others
 		# Provide the radius G2 of i0-neighborhood
 		# Here, all distances to i0 need to be computed as no distance have been computed yet
 		G2 = 0;
 		for (i in (1:M)[-i0]){
-			H2dist[i0,i]=H2dist[i,i0]=Thellinger2(i0,i)
+			if (is.na(H2dist[i0,i])) H2dist[i0,i]=H2dist[i,i0]=Thellinger2(i0,i)
 			if (RobustTest(i0,i,affinity=1-H2dist[i,i0])) G2<-max(G2,H2dist[i0,i])
 		}
 		
@@ -626,52 +648,29 @@ DensityTestim = function(X,p=1/2,family=NULL,theta=1/4,last=c('full','training')
 			
 		THO = flist[[i0]]
 		
-		if (last[1]=='full') {
-			descript =THO$descript
-			THO = switch(descript[[1]],					
-				'kernel' = Tkernel(X=X,bw=descript$bw,kernel=descript$kernel),
-				'histo' = Thisto(X=X,D=descript$D,breaks=descript$breaks),
-				'parametric' = Tparametric(X=X,name=descript$name)
-				)
-			}
+		if (last[1]=='full') THO = TBuildEstim(THO$descript,X)
+
 		if ((last[1]=='full')&(do.MLHO)) {
-			descript =MLHO$descript
-			MLHO = switch(descript[[1]],					
-				'kernel' = Tkernel(X=X,bw=descript$bw,kernel=descript$kernel),
-				'histo' = Thisto(X=X,D=descript$D,breaks=descript$breaks),
-				'parametric' = Tparametric(X=X,name=descript$name)
-				)
+			if (i0==i0.ML) MLHO = THO
+			else MLHO = TBuildEstim(MLHO$descript,X)
 			}
 		
 		if ((last[1]=='full')&(do.LSHO)) {
-			descript =LSHO$descript
-			LSHO = switch(descript[[1]],					
-				'kernel' = Tkernel(X=X,bw=descript$bw,kernel=descript$kernel),
-				'histo' = Thisto(X=X,D=descript$D,breaks=descript$breaks),
-				'parametric' = Tparametric(X=X,name=descript$name)
-				)
+			if (i0==i0.LS) LSHO = THO
+			else LSHO = TBuildEstim(LSHO$descript,X)
 			}	
 	
 		if (plot) {
 			x = seq(from=min(X),to=max(X),l=500)
 			y = THO$f(x)
-			lwd = 2
-			lty = 1
-			col = 'red'
-			leg = 'T'
+			lwd = 2; lty = 1; col = 'red'; leg = 'T'
 			if (do.MLHO) {
 				y = cbind(y,MLHO$f(x))
-				lwd = c(lwd,1)
-				lty = c(lty,1)
-				col = c(col,'black')
-				leg = c(leg,'ML')
+				lwd = c(lwd,1); lty = c(lty,1); col = c(col,'black'); leg = c(leg,'ML')
 			}
 			if (do.LSHO) {
 				y = cbind(y,LSHO$f(x))
-				lwd = c(lwd,1)
-				lty = c(lty,2)
-				col = c(col,'black')
-				leg = c(leg,'LS')
+				lwd = c(lwd,1); lty = c(lty,2); col = c(col,'black'); leg = c(leg,'LS')
 			}
 			matplot(x,y,col=col,lwd=lwd,lty=lty,type='l',ylab='',...)
 			#title('T estimate')
@@ -682,8 +681,8 @@ DensityTestim = function(X,p=1/2,family=NULL,theta=1/4,last=c('full','training')
 		if (verbose&do.MLHO) print(MLHO$descript)
 		if (verbose&do.LSHO) print(LSHO$descript)
 	
-		list(THO=THO,MLHO=MLHO,LSHO=LSHO,M=M,
-			comput=sum(!is.na(H2test))/2,total=M*(M-1)/2)
+		list(THO=THO,MLHO=MLHO,LSHO=LSHO,M=M,comput=sum(!is.na(H2test))/2,total=M*(M-1)/2,
+			iTHO=i0,iMLHO=i0.ML,iLSHO=i0.LS,H2dist=H2dist,allImageX2=allImageX2,flist=flist)
 	
 	} 
 	################# END INTERNAL PROCEDURE #################		
@@ -700,7 +699,7 @@ DensityTestim = function(X,p=1/2,family=NULL,theta=1/4,last=c('full','training')
 	if (is.function(csqrt)) csqrt=csqrt(n2)
 
 	# list of density estimates defined as functions	
-	flist = TBuildList(X1,family=family,kerneltab=kerneltab,bwtab=bwtab,Dmax=Dmax)
+	if (is.null(flist)) flist = TBuildList(X1,family=family,kerneltab=kerneltab,bwtab=bwtab,Dmax=Dmax)
 	
 	######## call the main procedure #############	
   	HO()
